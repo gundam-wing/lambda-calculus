@@ -103,7 +103,21 @@ def rename : Term -> String -> String -> Term
 
 -- determine if two terms are "the same" except for bound variable names (structural equality considers λx.x and λy.y different but they are semantically identical)
 
-def alphaEquiv :  Term -> Term -> Bool
+-- Prove that rename preserves size (needed for termination)
+theorem rename_size (t : Term) (old new : String) : (rename t old new).size = t.size := by
+  induction t with
+  | var x =>
+    simp [rename, Term.size]
+    split <;> simp [Term.size]
+  | abs x body ih =>
+    simp [rename, Term.size]
+    split
+    · simp [Term.size]
+    · simp [Term.size, ih]
+  | app f arg ihf iharg =>
+    simp [rename, Term.size, ihf, iharg]
+
+def alphaEquiv : Term -> Term -> Bool
   | var x, var y => x == y
   | abs x body1, abs y body2 =>
     let fv := freeVars body1 ++ freeVars body2
@@ -114,4 +128,20 @@ def alphaEquiv :  Term -> Term -> Bool
   | app f1 arg1, app f2 arg2 => alphaEquiv f1 f2 && alphaEquiv arg1 arg2
   | _, _ => false
 termination_by t1 t2 => (t1.size, t2.size)
-decreasing_by all_goals sorry
+decreasing_by
+  · -- abs case: body1'.size < (abs x body1).size
+    simp [Term.size, rename_size]
+    omega
+  · -- app case left: f1.size < (app f1 arg1).size
+    simp [Term.size]
+    omega
+  · -- app case right: arg1.size < (app f1 arg1).size
+    simp [Term.size]
+    omega
+
+-- notice that bound names are irrelevant, free names establish identity
+#eval alphaEquiv (var "x") (var "x") -- true
+#eval alphaEquiv (var "x") (var "y") -- false
+#eval alphaEquiv (abs "x" (var "x")) (abs "y" (var "y")) -- true
+#eval alphaEquiv (app (abs "a" (var "b")) (var "d")) (app (abs "d" (var "b")) (var "d")) -- true
+#eval alphaEquiv (app (abs "a" (var "b")) (var "d")) (app (abs "d" (var "b")) (var "e")) -- false
