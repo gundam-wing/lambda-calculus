@@ -1,5 +1,3 @@
-def hello := "world"
-
 -- AST
 inductive Term where
 | var: String -> Term
