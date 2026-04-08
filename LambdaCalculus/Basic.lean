@@ -124,6 +124,7 @@ def alphaEquiv : Term -> Term -> Bool
     let fresh := freshVar (fv ++ [x, y])
     let body1' := rename body1 x fresh
     let body2' := rename body2 y fresh
+    dbg_trace "fresh={fresh}, body1'={body1'.toString}, body2'={body2'.toString}"
     alphaEquiv body1' body2'
   | app f1 arg1, app f2 arg2 => alphaEquiv f1 f2 && alphaEquiv arg1 arg2
   | _, _ => false
@@ -139,9 +140,58 @@ decreasing_by
     simp [Term.size]
     omega
 
--- notice that bound names are irrelevant, free names establish identity
+-- notice that bound names are irrelevant, but free names establish identity
 #eval alphaEquiv (var "x") (var "x") -- true
 #eval alphaEquiv (var "x") (var "y") -- false
 #eval alphaEquiv (abs "x" (var "x")) (abs "y" (var "y")) -- true
 #eval alphaEquiv (app (abs "a" (var "b")) (var "d")) (app (abs "d" (var "b")) (var "d")) -- true
 #eval alphaEquiv (app (abs "a" (var "b")) (var "d")) (app (abs "d" (var "b")) (var "e")) -- false
+
+-- substitution
+
+-- t[x := s] means "replace free occurrences of x with s in t"
+
+def subt: Term -> String -> Term -> Term
+  | var y, x, s => if y == x then s else var y
+  | abs y body, x, s =>
+    if y == x then
+      abs y body
+    else if (freeVars s).contains y then
+      let fresh := freshVar (freeVars s ++ freeVars body ++ [x, y]) y
+      let body' := rename body y fresh
+      dbg_trace "y={y}, fresh={fresh}, body'={(rename body y fresh).toString}"
+      abs fresh (subt body' x s)
+    else
+      abs y (subt body x s)
+  | app f arg, x, s => app (subt f x s) (subt arg x s)
+termination_by t => t.size
+decreasing_by
+   · simp [Term.size, rename_size];  -- abs capture: body'.size < (abs y body).size
+   · simp [Term.size];               -- abs safe: body.size < (abs y body).size
+   · simp [Term.size]; omega               -- app left: f.size < (app f arg).size
+   · simp [Term.size]; omega               -- app right: arg.size < (app f arg).size
+
+#eval subt (var "y") "x" (var "s") -- y
+#eval subt (var "y") "y" (var "s") -- s
+
+-- substitution stops at rebinding
+#eval subt (abs "x" (var "x")) "x" (var "y")  -- abs "x" (var "x")
+
+-- safe abstraction (binder not in freeVars of s)
+#eval subt (abs "y" (var "x")) "x" (var "z")  -- abs "y" (var "z")
+#eval subt (abs "y" (var "x")) "x" (var "z") == Term.abs "y" (Term.var "z")
+
+-- application recurses both sides
+#eval subt (app (var "x") (var "x")) "x" (abs "z" (var "z"))  -- app (abs "z" (var "z")) (abs "z" (var "z"))
+
+-- CAPTURE case
+#eval subt (abs "y" (var "x")) "x" (var "y")  -- abs "y'" (var "y")
+
+-- nested capture case
+#eval subt (abs "y" (app (var "x") (var "y"))) "x" (app (var "y") (var "z"))  -- abs "y'" (app (app (var "y") (var "z")) (var "y'"))
+
+-- beta reduction
+
+-- evaluation strategy
+
+-- proofs
