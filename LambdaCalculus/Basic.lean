@@ -188,8 +188,63 @@ decreasing_by
 -- nested capture case
 #eval subt (abs "y" (app (var "x") (var "y"))) "x" (app (var "y") (var "z"))  -- abs "y'" (app (app (var "y") (var "z")) (var "y'"))
 
--- beta reduction
+-- beta reduction (step)
 
--- evaluation strategy
+def step: Term -> Option Term
+  | var _ => none
+  | abs x body =>
+    match step body with
+      | some body' => some (abs x body')
+      | none => none
+  | app (abs x body) arg => some (subt body x arg)
+  | app f arg => match step f with
+    | some f' => some (app f' arg)
+    | none =>
+      match step arg with
+        | some arg' => some (app f arg')
+        | none => none
+
+-- single step on a redex
+#eval step (app (abs "x" (var "x")) (var "y"))  -- some (var "y")
+
+-- no redex, already normal
+#eval step (var "x")  -- none
+
+-- normal order: outer redex first
+#eval step (app (abs "x" (var "x")) (app (abs "y" (var "y")) (var "z")))  -- some (app (abs "y" (var "y")) (var "z"))
+
+-- reduces under lambda
+#eval step (abs "x" (app (abs "y" (var "y")) (var "z")))  -- some (abs "x" (var "z"))
+
+-- evaluation
+
+partial def eval: Term -> Term
+  | t => match step t with
+    | none => t
+    | some t' => eval t'
+
+-- identity function applied to a variable
+def idTerm := abs "x" (var "x")
+#eval (eval (app idTerm (var "y"))).toString -- y
+
+-- constant function, argument is discarded
+def constTerm := abs "x" (abs "y" (var "x"))
+#eval (eval (app (app constTerm (var "a")) (var "b"))).toString -- a
+
+-- church booleans
+def tru := abs "t" (abs "f" (var "t"))
+def fls := abs "t" (abs "f" (var "f"))
+
+-- church booleans NOT
+def not := abs "b" (app (app (var "b") fls) tru)
+#eval (eval (app not tru)).toString   -- should reduce to fls: (λt.(λf.f))
+#eval (eval (app not fls)).toString   -- should reduce to tru: (λt.(λf.t))
+
+-- church booleans AND
+def and := abs "p" (abs "q" (app (app (var "p") (var "q")) fls))
+#eval (eval (app (app and tru) tru)).toString  -- tru: (λt.(λf.t))
+#eval (eval (app (app and tru) fls)).toString  -- fls: (λt.(λf.f))
+#eval (eval (app (app and fls) tru)).toString  -- fls: (λt.(λf.f))
+
 
 -- proofs
