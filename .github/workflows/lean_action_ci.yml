@@ -5,6 +5,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Checkout reads the repository. lean-action's default .lake cache uses
+# the Actions cache service, which does not need extra GITHUB_TOKEN scopes.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
